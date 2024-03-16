@@ -1,0 +1,59 @@
+pipeline {
+    agent any
+    tools
+    {
+        jdk 'jdk11'
+        maven 'maven3'
+    }
+    environment
+    {
+        SCANNER_HOME = tool 'sonar-scanner'
+    }
+
+    stages {
+        stage('Git Checkout') {
+            steps {
+                git branch: 'main', credentialsId: '5c9df7d6-fea5-4802-837d-3521aa82cf8b', url: 'https://github.com/chameerakularathna/Petclinic'
+            }
+        }
+        stage('Compile Code') {
+            steps {
+                sh 'mvn clean compile'
+            }
+        }
+       stage('Sonarqube Analysis') 
+       {
+            steps {
+                sh ''' $SCANNER_HOME/bin/sonar-scanner -Dsonar.url=http://192.168.43.4:9000/ -Dsonar.login=squ_13f81064b900ea55b41bbf08860d509ea465acf6 -Dsonar.projectName=webshop \
+                -Dsonar.java.binaries=. \
+                -Dsonar.projectKey=webshop '''
+            }
+       }
+         stage('OWASP Dependacy Scan') {
+            steps {
+                dependencyCheck additionalArguments: ' --scan ./', odcInstallation: 'DP'
+                dependencyCheckPublisher pattern: '**/dependancy-check-report.xml'
+            }
+        }
+         stage('Build Code') {
+            steps {
+                sh 'mvn clean install'
+            }
+        }
+         stage('Build and Push Docker Image') {
+            steps {
+              script
+              {
+                  //charey means dockerhub display username and the crednetials passing here is jenerate from jenkins pipeline syntax with dockerhub credentials
+                 withDockerRegistry(credentialsId: '9354569c-1978-4b7a-a6c4-218267c89a63', toolName: 'docker') {
+                    sh " docker build -t petclinic:latest -f Dockerfile ."
+                    sh "docker tag petclinic:latest charey/petclici:latest"
+                    sh "docker push charey/petclici:latest "
+                  }
+              }
+            }
+        }
+    }
+}
+
+
